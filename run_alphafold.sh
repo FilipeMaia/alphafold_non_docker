@@ -7,24 +7,23 @@ usage() {
         echo "Please make sure all required parameters are given"
         echo "Usage: $0 <OPTIONS>"
         echo "Required Parameters:"
-        echo "-d <data_dir>         Path to directory of supporting data"
-        echo "-o <output_dir>       Path to a directory that will store the results."
         echo "-f <fasta_path>       Path to a FASTA file containing sequence. If a FASTA file contains multiple sequences, then it will be folded as a multimer"
-        echo "-t <max_template_date> Maximum template release date to consider (ISO-8601 format - i.e. YYYY-MM-DD). Important if folding historical test sets"
+
         echo "Optional Parameters:"
-        echo "-g <use_gpu>          Enable NVIDIA runtime to run with GPUs (default: true)"
+	echo "-d <data_dir>         Path to directory of supporting data (default: $ALPHAFOLD_DATA_DIR)"
+	echo "-o <output_dir>       Path to a directory that will store the results. (default: current work directory)"
         echo "-n <openmm_threads>   OpenMM threads (default: all available cores)"
-        echo "-a <gpu_devices>      Comma separated list of devices to pass to 'CUDA_VISIBLE_DEVICES' (default: 0)"
-        echo "-m <model_preset>     Choose preset model configuration - the monomer model, the monomer model with extra ensembling, monomer model with pTM head, or multimer model (default: 'monomer')"
+        echo "-m <model_preset>     Choose preset model configuration - the monomer model, the monomer model with extra ensembling, monomer model with pTM head, or multimer model (default: 'monomer_ptm')"
         echo "-c <db_preset>        Choose preset MSA database configuration - smaller genetic database config (reduced_dbs) or full genetic database config (full_dbs) (default: 'full_dbs')"
         echo "-p <use_precomputed_msas> Whether to read MSAs that have been written to disk. WARNING: This will not check if the sequence, database or configuration have changed (default: 'false')"
         echo "-l <is_prokaryote>    Optional for multimer system, not used by the single chain system. A boolean specifying true where the target complex is from a prokaryote, and false where it is not, or where the origin is unknown. This value determine the pairing method for the MSA (default: 'None')"
         echo "-b <benchmark>        Run multiple JAX model evaluations to obtain a timing that excludes the compilation time, which should be more indicative of the time required for inferencing many proteins (default: 'false')"
+	echo "-t <max_template_date> Maximum template release date to consider (ISO-8601 format - i.e. YYYY-MM-DD). Important if folding historical test sets"
         echo ""
         exit 1
 }
 
-while getopts ":d:o:f:t:g:n:a:m:c:p:l:b" i; do
+while getopts ":d:o:f:t:g:n:m:c:p:l:b" i; do
         case "${i}" in
         d)
                 data_dir=$OPTARG
@@ -38,14 +37,8 @@ while getopts ":d:o:f:t:g:n:a:m:c:p:l:b" i; do
         t)
                 max_template_date=$OPTARG
         ;;
-        g)
-                use_gpu=$OPTARG
-        ;;
         n)
                 openmm_threads=$OPTARG
-        ;;
-        a)
-                gpu_devices=$OPTARG
         ;;
         m)
                 model_preset=$OPTARG
@@ -66,20 +59,24 @@ while getopts ":d:o:f:t:g:n:a:m:c:p:l:b" i; do
 done
 
 # Parse input and set defaults
-if [[ "$data_dir" == "" || "$output_dir" == "" || "$fasta_path" == "" || "$max_template_date" == "" ]] ; then
+if [[  "$output_dir" == "" || "$fasta_path" == "" ]] ; then
     usage
+fi
+
+if [[  "$output_dir" == "" ]] ; then
+    output_dir="."
+fi
+
+if [[ "$data_dir" == "" ]] ; then
+    data_dir=$ALPHAFOLD_DATA_DIR
+fi
+
+if [[ "$max_template_date" == "" ]] ; then
+    max_template_date="1901-01-01"
 fi
 
 if [[ "$benchmark" == "" ]] ; then
     benchmark=false
-fi
-
-if [[ "$use_gpu" == "" ]] ; then
-    use_gpu=true
-fi
-
-if [[ "$gpu_devices" == "" ]] ; then
-    gpu_devices=0
 fi
 
 if [[ "$model_preset" == "" ]] ; then
@@ -113,27 +110,20 @@ if [ ! -f "$alphafold_script" ]; then
     exit 1
 fi
 
-# Export ENVIRONMENT variables and set CUDA devices for use
-# CUDA GPU control
-export CUDA_VISIBLE_DEVICES=-1
-if [[ "$use_gpu" == true ]] ; then
-    export CUDA_VISIBLE_DEVICES=0
-
-    if [[ "$gpu_devices" ]] ; then
-        export CUDA_VISIBLE_DEVICES=$gpu_devices
-    fi
-fi
-
 # OpenMM threads control
 if [[ "$openmm_threads" ]] ; then
     export OPENMM_CPU_THREADS=$openmm_threads
 fi
 
 # TensorFlow control
-export TF_FORCE_UNIFIED_MEMORY='1'
+if [[ -z "${TF_FORCE_UNIFIED_MEMORY}" ]]; then
+    export TF_FORCE_UNIFIED_MEMORY='1'
+fi
 
 # JAX control
-export XLA_PYTHON_CLIENT_MEM_FRACTION='4.0'
+if [[ -z "${XLA_PYTHON_CLIENT_MEM_FRACTION}" ]]; then
+    export XLA_PYTHON_CLIENT_MEM_FRACTION='4.0'
+fi
 
 # Path and user config (change me if required)
 uniref90_database_path="$data_dir/uniref90/uniref90.fasta"
