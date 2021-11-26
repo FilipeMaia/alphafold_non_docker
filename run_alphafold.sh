@@ -80,7 +80,7 @@ if [[ "$benchmark" == "" ]] ; then
 fi
 
 if [[ "$model_preset" == "" ]] ; then
-    model_preset="monomer"
+    model_preset="monomer_ptm"
 fi
 
 if [[ "$model_preset" != "monomer" && "$model_preset" != "monomer_casp14" && "$model_preset" != "monomer_ptm" && "$model_preset" != "multimer" ]] ; then
